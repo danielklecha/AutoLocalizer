@@ -12,6 +12,13 @@
 	<Authors>danielklecha</Authors>
 	<Description>Tool to translate resx file to specific language using Google Translator</Description>
 	<Copyright>danielklecha</Copyright>
+	<PackageProjectUrl>https://github.com/danielklecha/AutoLocalizer</PackageProjectUrl>
+	<PackageIcon>icon.png</PackageIcon>
+	<RepositoryUrl>https://github.com/danielklecha/AutoLocalizer</RepositoryUrl>
+	<NeutralLanguage>en</NeutralLanguage>
+	<PackageLicenseExpression>MIT</PackageLicenseExpression>
+	<PackageRequireLicenseAcceptance>True</PackageRequireLicenseAcceptance>
+	<PackageId>autolocalizer</PackageId>
   </PropertyGroup>
 
   <ItemGroup>
@@ -30,6 +37,10 @@
   <ItemGroup>
     <None Update="appdynamicsettings.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="icon.png">
+      <Pack>True</Pack>
+      <PackagePath>\</PackagePath>
     </None>
   </ItemGroup>
 
