@@ -18,7 +18,7 @@
 	<NeutralLanguage>en</NeutralLanguage>
 	<PackageLicenseExpression>MIT</PackageLicenseExpression>
 	<PackageRequireLicenseAcceptance>True</PackageRequireLicenseAcceptance>
-	<PackageId>autolocalizer</PackageId>
+	<PackageId></PackageId>
 	<PackageReadmeFile>README.md</PackageReadmeFile>
   </PropertyGroup>
 

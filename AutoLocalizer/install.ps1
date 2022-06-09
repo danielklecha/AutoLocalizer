@@ -1,3 +1,3 @@
-﻿dotnet tool uninstall --global autolocalizer
+﻿dotnet tool uninstall --global AutoLocalizer
 dotnet pack
-dotnet tool install --global --add-source ./nupkg autolocalizer
+dotnet tool install --global --add-source ./nupkg AutoLocalizer
