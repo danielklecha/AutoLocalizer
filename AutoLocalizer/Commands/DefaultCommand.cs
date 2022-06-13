@@ -26,8 +26,11 @@ public class DefaultCommand : AsyncCommand<DefaultCommandSettings>
     }
     public override async Task<int> ExecuteAsync( CommandContext context, DefaultCommandSettings settings )
     {
-        if ( _options.Value.Key == null || _options.Value.Region == null )
-            throw new Exception( "Configuration is invalid" );
+        if ( string.IsNullOrEmpty( _options.Value.Key ) || string.IsNullOrEmpty( _options.Value.Region ) )
+        {
+            AnsiConsole.WriteLine( "[red]Configuration is invalid[/]" );
+            return -1;
+        }
         if ( !File.Exists( settings.FilePath ) )
             throw new Exception( "File does not exist" );
         if (string.IsNullOrEmpty(settings.Language))
@@ -48,37 +51,40 @@ public class DefaultCommand : AsyncCommand<DefaultCommandSettings>
         var xdoc = await XDocument.LoadAsync( s, LoadOptions.None, CancellationToken.None );
         var elements = xdoc.XPathSelectElements( "//data" );
         string endpoint = "https://api.cognitive.microsofttranslator.com/";
-        string route = $"/translate?api-version=3.0&from=en&to={settings.Language}";
+        string route = $"/translate?api-version=3.0&from={settings.SourceLanguage}&to={settings.Language}";
         var client = new RestClient( endpoint + route );
-        try
-        {
-            foreach (var element in elements)
+        var count = elements.Count();
+        await AnsiConsole.Progress()
+            .StartAsync(async ctx =>
             {
-                string name = element.Attribute("name")?.Value ?? throw new Exception("Missing name attribute");
-                XElement valueElement = element.Element("value") ?? throw new Exception("Missing value element");
-                if (string.IsNullOrWhiteSpace(valueElement.Value))
-                    continue;
-                if (oldData.TryGetValue(name, out var oldValue) && !string.IsNullOrWhiteSpace(oldValue))
+                // Define tasks
+                var task = ctx.AddTask($"Translating");
+                task.MaxValue(count);
+                foreach (var element in elements)
                 {
-                    valueElement.Value = oldValue;
-                    continue;
+
+                    string name = element.Attribute("name")?.Value ?? throw new Exception("Missing name attribute");
+                    XElement valueElement = element.Element("value") ?? throw new Exception("Missing value element");
+                    if (string.IsNullOrWhiteSpace(valueElement.Value))
+                        continue;
+                    if (oldData.TryGetValue(name, out var oldValue) && !string.IsNullOrWhiteSpace(oldValue))
+                    {
+                        valueElement.Value = oldValue;
+                        task.Increment(1);
+                        continue;
+                    }
+                    var request = new RestRequest()
+                        .AddHeader("Ocp-Apim-Subscription-Key", _options.Value.Key)
+                        .AddHeader("Ocp-Apim-Subscription-Region", _options.Value.Region)
+                        .AddJsonBody(new object[] { new { Text = valueElement.Value } });
+                    var response = await client.PostAsync<List<MicrosoftTranslatorRecord>>(request, CancellationToken.None);
+                    valueElement?.SetValue(response?.FirstOrDefault()?.Translations?.FirstOrDefault()?.Text ?? string.Empty);
+                    task.Increment(1);
                 }
-                var request = new RestRequest()
-                   .AddHeader("Ocp-Apim-Subscription-Key", _options.Value.Key)
-                   .AddHeader("Ocp-Apim-Subscription-Region", _options.Value.Region)
-                   .AddJsonBody(new object[] { new { Text = valueElement.Value } });
-                var response = await client.PostAsync<List<MicrosoftTranslatorRecord>>(request, CancellationToken.None);
-                valueElement?.SetValue(response?.FirstOrDefault()?.Translations?.FirstOrDefault()?.Text ?? string.Empty);
-            }
-        }
-        catch(Exception ex)
-        {
-            AnsiConsole.WriteException(ex);
-            return -1;
-        }
+            });
         using var xmlWriter = XmlWriter.Create(targetPath, new XmlWriterSettings { Async = true, Indent = true });
         await xdoc.WriteToAsync( xmlWriter, CancellationToken.None );
-        AnsiConsole.Write(new Markup("[green]Success![/]"));
+        AnsiConsole.Write(new Markup($"[green]File saved in {targetPath}[/]"));
         return 0;
     }
 
@@ -106,5 +112,9 @@ public class DefaultCommand : AsyncCommand<DefaultCommandSettings>
         [CommandOption("--override")]
         [DefaultValue(false)]
         public bool Override { get; set; }
+
+        [CommandOption("--sourcelang")]
+        [DefaultValue("en")]
+        public string? SourceLanguage { get; set; }
     }
 }

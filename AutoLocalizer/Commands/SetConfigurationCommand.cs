@@ -25,7 +25,7 @@ public class SetConfigurationCommand : AsyncCommand<SetConfigurationSettings>
     public override async Task<int> ExecuteAsync( CommandContext context, SetConfigurationSettings settings )
     {
         var value = _options.Value;
-        value.Key = await new TextPrompt<string>("What's key?").ShowAsync(AnsiConsole.Console, CancellationToken.None);
+        value.Key = await new TextPrompt<string>("What's key?").Secret().ShowAsync(AnsiConsole.Console, CancellationToken.None);
         value.Region = await new TextPrompt<string>("What's region?").ShowAsync(AnsiConsole.Console, CancellationToken.None);
         await _optionsSync.SyncAsync(value);
         await _optionsSync.SaveAsync();

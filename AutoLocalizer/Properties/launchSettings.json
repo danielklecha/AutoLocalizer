@@ -1,9 +1,7 @@
 {
   "profiles": {
     "AutoLocalizer": {
-      "commandName": "Project",
-      "commandLineArgs": "C:\\TestResx\\sample.resx pl",
-      "workingDirectory": "C:\\TestResx"
+      "commandName": "Project"
     }
   }
 }

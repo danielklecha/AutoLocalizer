@@ -7,6 +7,7 @@ using AutoLocalizer.Services;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using RestSharp;
 using Spectre.Console.Cli;
 using System.Text.Json;
@@ -28,11 +29,18 @@ var hostBuilder = Host.CreateDefaultBuilder(args)
                 context.Configuration.GetSection(nameof(WritableOptions)),
                 ((IConfigurationRoot)context.Configuration).Providers.OfType<IWritableConfigurationProvider>()));
     });
-var registrar = new TypeRegistrar(hostBuilder);
+using var registrar = new TypeRegistrar(hostBuilder);
 var app = new CommandApp<DefaultCommand>(registrar);
 app.Configure(config =>
 {
     config.SetApplicationName("autolocalizer");
+    config.SetExceptionHandler(ex =>
+    {
+        registrar.Host.Services.GetRequiredService<ILogger<Program>>().LogError(ex, message: "Critical exception");
+    });
+#if DEBUG
+    config.ValidateExamples();
+#endif
     config.AddBranch("set", c =>
     {
         c.AddCommand<SetConfigurationCommand>("configuration");

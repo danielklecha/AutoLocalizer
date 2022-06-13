@@ -8,7 +8,7 @@ using System.Threading.Tasks;
 
 namespace AutoLocalizer.Services;
 
-public sealed class TypeResolver : ITypeResolver, IDisposable
+public sealed class TypeResolver : ITypeResolver
 {
     private readonly IHost _host;
 
@@ -24,10 +24,5 @@ public sealed class TypeResolver : ITypeResolver, IDisposable
             return null;
         }
         return _host?.Services.GetService(type);
-    }
-
-    public void Dispose()
-    {
-        _host.Dispose();
     }
 }

@@ -9,8 +9,13 @@ using System.Threading.Tasks;
 
 namespace AutoLocalizer.Services;
 
-public sealed class TypeRegistrar : ITypeRegistrar
+public sealed class TypeRegistrar : ITypeRegistrar, IDisposable
 {
+    private IHost? _host;
+    private bool disposedValue;
+
+    public IHost Host => _host ??= _builder.Build();
+
     private readonly IHostBuilder _builder;
 
     public TypeRegistrar( IHostBuilder builder )
@@ -20,7 +25,7 @@ public sealed class TypeRegistrar : ITypeRegistrar
 
     public ITypeResolver Build()
     {
-        return new TypeResolver(_builder.Build());
+        return new TypeResolver(Host);
     }
 
     public void Register( Type service, Type implementation )
@@ -37,5 +42,23 @@ public sealed class TypeRegistrar : ITypeRegistrar
     {
         ArgumentNullException.ThrowIfNull(func);
         _builder.ConfigureServices(services => services.AddSingleton(service, ( provider ) => func()));
+    }
+
+    private void Dispose( bool disposing )
+    {
+        if (!disposedValue)
+        {
+            if (disposing)
+            {
+                _host?.Dispose();
+            }
+            disposedValue = true;
+        }
+    }
+
+    public void Dispose()
+    {
+        Dispose(disposing: true);
+        GC.SuppressFinalize(this);
     }
 }
