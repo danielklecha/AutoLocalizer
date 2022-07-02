@@ -24,11 +24,12 @@ public class DefaultCommand : AsyncCommand<DefaultCommandSettings>
     {
         _options = options;
     }
+
     public override async Task<int> ExecuteAsync( CommandContext context, DefaultCommandSettings settings )
     {
         if ( string.IsNullOrEmpty( _options.Value.Key ) || string.IsNullOrEmpty( _options.Value.Region ) )
         {
-            AnsiConsole.WriteLine( "[red]Configuration is invalid[/]" );
+            AnsiConsole.MarkupLine( "[red]Configuration is invalid[/]" );
             return -1;
         }
         if ( !File.Exists( settings.FilePath ) )
@@ -54,7 +55,10 @@ public class DefaultCommand : AsyncCommand<DefaultCommandSettings>
         string route = $"/translate?api-version=3.0&from={settings.SourceLanguage}&to={settings.Language}";
         var client = new RestClient( endpoint + route );
         var count = elements.Count();
+        var translatedCount = 0;
+        var copiedCount = 0;
         await AnsiConsole.Progress()
+            .AutoClear( true )
             .StartAsync(async ctx =>
             {
                 // Define tasks
@@ -62,7 +66,6 @@ public class DefaultCommand : AsyncCommand<DefaultCommandSettings>
                 task.MaxValue(count);
                 foreach (var element in elements)
                 {
-
                     string name = element.Attribute("name")?.Value ?? throw new Exception("Missing name attribute");
                     XElement valueElement = element.Element("value") ?? throw new Exception("Missing value element");
                     if (string.IsNullOrWhiteSpace(valueElement.Value))
@@ -71,6 +74,7 @@ public class DefaultCommand : AsyncCommand<DefaultCommandSettings>
                     {
                         valueElement.Value = oldValue;
                         task.Increment(1);
+                        copiedCount++;
                         continue;
                     }
                     var request = new RestRequest()
@@ -80,11 +84,12 @@ public class DefaultCommand : AsyncCommand<DefaultCommandSettings>
                     var response = await client.PostAsync<List<MicrosoftTranslatorRecord>>(request, CancellationToken.None);
                     valueElement?.SetValue(response?.FirstOrDefault()?.Translations?.FirstOrDefault()?.Text ?? string.Empty);
                     task.Increment(1);
+                    translatedCount++;
                 }
             });
         using var xmlWriter = XmlWriter.Create(targetPath, new XmlWriterSettings { Async = true, Indent = true });
         await xdoc.WriteToAsync( xmlWriter, CancellationToken.None );
-        AnsiConsole.Write(new Markup($"[green]File saved in {targetPath}[/]"));
+        AnsiConsole.MarkupLine( $"Saved in [blue]{targetPath}[/]; Number of copied/translated records: [blue]{copiedCount}/{translatedCount}[/]" );
         return 0;
     }
 
