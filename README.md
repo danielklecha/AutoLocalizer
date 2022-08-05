@@ -9,8 +9,9 @@ AutoLocalizer is a [.NET Global Tool](https://docs.microsoft.com/en-us/dotnet/co
 
 The tool is run from the command line and provides the following options for the translation:
 
+* Load resx file
 * Translate using Microsoft Translator
-* Use exising translations (available for resx files)
+* Use exising translations
 * Save changes in as resx or po file
 
 ## Installation

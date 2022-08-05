@@ -8,6 +8,7 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.Linq;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using System.Xml;
 using System.Xml.Linq;
@@ -27,28 +28,38 @@ public class DefaultCommand : AsyncCommand<DefaultCommandSettings>
 
     public override async Task<int> ExecuteAsync( CommandContext context, DefaultCommandSettings settings )
     {
-        if ( string.IsNullOrEmpty( _options.Value.Key ) || string.IsNullOrEmpty( _options.Value.Region ) )
-        {
-            AnsiConsole.MarkupLine( "[red]Configuration is invalid[/]" );
-            return -1;
-        }
         if ( !File.Exists( settings.SourcePath ) )
             throw new Exception( "File does not exist" );
+        if ( string.IsNullOrEmpty( settings.SourceLanguage ) )
+            throw new Exception( "Source language is not set" );
         if ( string.IsNullOrEmpty( settings.TargetLanguage ) )
-            throw new Exception( "Language is not set" );
-        if ( !( Path.GetExtension( settings.SourcePath )?.Equals( ".resx", StringComparison.InvariantCultureIgnoreCase ) ?? false ) )
+            throw new Exception( "Target language is not set" );
+        var sourceExtension = Path.GetExtension( settings.SourcePath )?.TrimStart( '.' );
+        if ( !( sourceExtension?.Equals( "resx", StringComparison.InvariantCultureIgnoreCase ) ?? false ) )
             throw new Exception( "Extension is not supported" );
+        if ( settings.TargetExtension == "resx" && settings.SourceLanguage == settings.TargetLanguage )
+            throw new Exception( "Source and target are the same" );
+        if ( settings.SourceLanguage != settings.TargetLanguage && ( string.IsNullOrEmpty( _options.Value.Key ) || string.IsNullOrEmpty( _options.Value.Region ) ) )
+            throw new Exception( "Configuration is invalid" );
         var targetFolder = Path.GetDirectoryName(settings.SourcePath) ?? throw new Exception( "Unable to grab destination folder" );
-        var targetName = $"{Path.GetFileNameWithoutExtension(settings.SourcePath)}.{settings.TargetLanguage}.{settings.TargetExtension}";
+        var targetName = Path.GetFileNameWithoutExtension( settings.SourcePath );
+        if ( !targetName.EndsWith( $".{settings.TargetLanguage}" ) )
+            targetName += $".{settings.TargetLanguage}";
+        targetName += $".{settings.TargetExtension}";
         var targetPath = Path.Combine(targetFolder, targetName);
         Dictionary<string, string> oldData = new();
-        switch ( settings.TargetExtension )
+        if ( !settings.Override && File.Exists( targetPath ) )
         {
-            case "resx":
-                if ( !settings.Override && File.Exists( targetPath ) )
+            switch ( settings.TargetExtension )
+            {
+                case "resx":
                     oldData = await GetTransaltionsFromResxFileAsync( targetPath );
-                break;
-        }
+                    break;
+                case "po":
+                    oldData = await GetTransaltionsFromPoFileAsync( targetPath );
+                    break;
+            }
+        }   
         using var s = File.OpenRead( settings.SourcePath );
         var xdoc = await XDocument.LoadAsync( s, LoadOptions.None, CancellationToken.None );
         if ( settings.SourceLanguage != settings.TargetLanguage )
@@ -63,8 +74,10 @@ public class DefaultCommand : AsyncCommand<DefaultCommandSettings>
                 await SaveAsResxFileAsync( xdoc, targetPath );
                 break;
             case "po":
-                await SaveAsPOFileAsync( xdoc, Path.GetFileNameWithoutExtension( settings.SourcePath ), targetPath );
+                await SaveAsPOFileAsync( xdoc, GetContext( settings ), targetPath );
                 break;
+            default:
+                throw new Exception( $"Unable to save to {settings.TargetExtension} extension" );
         }
         AnsiConsole.MarkupLine( $"Saved in [blue]{targetPath}[/]" );
         return 0;
@@ -120,19 +133,37 @@ public class DefaultCommand : AsyncCommand<DefaultCommandSettings>
         await document.WriteToAsync( xmlWriter, CancellationToken.None );
     }
 
-    private async Task SaveAsPOFileAsync( XDocument document, string context, string path )
+    private string? GetContext( DefaultCommandSettings settings )
+    {
+        if( settings.SkipContext )
+            return null;
+        return $"{settings.ContextPrefix}{Path.GetFileNameWithoutExtension( settings.SourcePath )}";
+    }
+
+    /// <summary>
+    /// Save XDocument as po file
+    /// Based on:
+    /// OrchardCore.Localization.PortableObject.PortableObjectStringLocalizerFactory
+    /// </summary>
+    /// <param name="document"></param>
+    /// <param name="context"></param>
+    /// <param name="path"></param>
+    /// <returns></returns>
+    private async Task SaveAsPOFileAsync( XDocument document, string? context, string path )
     {
         var elements = document.XPathSelectElements( "//data" );
         if ( elements == null )
             return;
         StringBuilder sb = new StringBuilder();
-        foreach( XElement element in elements )
+        foreach ( XElement element in elements )
         {
             var key = element.Attribute( "name" )?.Value.Replace( "\"", "\\\"" );
             var value = element.Element( "value" )?.Value.Replace( "\"", "\\\"" );
+            if ( context != null )
+                sb
+                    .AppendFormat( "msgctxt \"{0}\"", context )
+                    .AppendLine();
             sb
-                .AppendFormat( "msgctxt \"{0}\"", context )
-                .AppendLine()
                 .AppendFormat( "msgid \"{0}\"", key )
                 .AppendLine()
                 .AppendFormat( "msgstr \"{0}\"", value )
@@ -152,6 +183,15 @@ public class DefaultCommand : AsyncCommand<DefaultCommandSettings>
             .Where( x => !string.IsNullOrEmpty( x.Key ) && !string.IsNullOrEmpty( x.Value ) )
             .ToDictionary( x => x.Key ?? string.Empty, x => x.Value ?? string.Empty );
     }
+
+    private async Task<Dictionary<string, string>> GetTransaltionsFromPoFileAsync( string path )
+    {
+        var content = await File.ReadAllTextAsync( path );
+        var regex = new Regex( "msgid \"(?<key>.+)\"(\n|\r|\r\n)msgstr \"(?<value>.+)\"(\n|\r|\r\n|$)", RegexOptions.None, TimeSpan.FromMilliseconds( 400 ) );
+        return regex.Matches( content )
+            .ToDictionary( x => x.Groups[ "key" ].Value, x => x.Groups[ "value" ].Value );
+    }
+
 
     public class DefaultCommandSettings : CommandSettings
     {
@@ -177,5 +217,11 @@ public class DefaultCommand : AsyncCommand<DefaultCommandSettings>
 
         [CommandOption( "--verbose" )]
         public bool Verbose { get; set; }
+
+        [CommandOption( "--contextprefix" )]
+        public string? ContextPrefix { get; set; }
+
+        [CommandOption( "--skipcontext" )]
+        public bool SkipContext { get; set; }
     }
 }
