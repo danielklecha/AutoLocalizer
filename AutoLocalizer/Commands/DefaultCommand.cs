@@ -137,7 +137,10 @@ public class DefaultCommand : AsyncCommand<DefaultCommandSettings>
     {
         if( settings.SkipContext )
             return null;
-        return $"{settings.ContextPrefix}{Path.GetFileNameWithoutExtension( settings.SourcePath )}";
+        var context = $"{settings.ContextPrefix}{Path.GetFileNameWithoutExtension( settings.SourcePath )}";
+        if ( settings.SourceLanguage != null && context.EndsWith( $".{settings.SourceLanguage}" ) )
+            return context[ ..( context.Length - settings.SourceLanguage.Length - 1 ) ];
+        return context;
     }
 
     /// <summary>
